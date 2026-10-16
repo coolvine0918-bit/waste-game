@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>실시간 3초 분리수거 대작전 🌍 | 모바일 멀티플레이</title>
+  
+  <!-- Google Fonts for Friendly Korean Typography -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Jua&family=Noto+Sans+KR:wght@400;600;800;900&display=swap" rel="stylesheet">
+  
+  <!-- Firebase SDKs (Compat for simplicity and broad compatibility) -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+  
+  <!-- Canvas Confetti for Celebration -->
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+  
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app" class="app-container">
+    
+    <!-- Top Navigation Header -->
+    <header class="game-header">
+      <div class="logo-area">
+        <span class="game-icon">♻️</span>
+        <h1 class="game-title">3초 분리수거 대작전</h1>
+      </div>
+      <div class="header-controls">
+        <div id="room-badge" class="badge room-badge">방: <span id="current-room-text">대기실</span></div>
+        <div id="mode-badge" class="badge mode-badge">가상 멀티플레이</div>
+        <button id="btn-sound" class="icon-btn" title="사운드 온/오프">🔊</button>
+        <button id="btn-firebase-modal" class="icon-btn" title="Firebase 설정">⚙️</button>
+      </div>
+    </header>
+
+    <!-- Screen 1: Lobby Screen -->
+    <section id="screen-lobby" class="screen active">
+      <div class="lobby-card">
+        <div class="lobby-mascot-preview">
+          <div id="lobby-poodle" class="sprite-box poodle-preview"></div>
+          <div class="speech-bubble">
+            안녕! 난 환경지킴이 푸들이야 🐶<br>
+            친구들과 함께 3초 안에 분리수거를 성공해봐!
+          </div>
+        </div>
+
+        <div class="lobby-form">
+          <div class="input-group">
+            <label for="input-nickname">내 닉네임</label>
+            <input type="text" id="input-nickname" placeholder="닉네임 입력 (예: 초록요정)" maxlength="10" value="환경지킴이">
+          </div>
+          <div class="input-group">
+            <label for="input-room">교실 방 코드 (동일한 방에 모여요)</label>
+            <input type="text" id="input-room" placeholder="방 코드 (예: class1)" maxlength="12" value="class1">
+          </div>
+          <button id="btn-enter-room" class="btn btn-primary pulse-btn">대기실 입장하기 🚪</button>
+        </div>
+
+        <!-- Waiting Room Room State -->
+        <div id="lobby-room-area" class="room-state-area" style="display: none;">
+          <div class="room-info-bar">
+            <h3>방 접속자 목록 (<span id="player-count">0</span>명 접속 중)</h3>
+            <span class="room-hint">새 창이나 다른 기기에서 같은 방 코드로 들어오면 함께 겨룹니다!</span>
+          </div>
+
+          <div id="player-list-grid" class="player-grid">
+            <!-- Player tags dynamically rendered -->
+          </div>
+
+          <div class="lobby-actions">
+            <button id="btn-start-game" class="btn btn-success btn-large">
+              🚀 모두 함께 게임 시작! (20라운드)
+            </button>
+          </div>
+        </div>
+
+        <!-- Rules Briefing -->
+        <div class="rules-box">
+          <h4>💡 게임 규칙</h4>
+          <ul>
+            <li>⏱️ <strong>3초 스피드!</strong> 쓰레기가 나타나면 3초 안에 올바른 수거함으로 드래그!</li>
+            <li>✨ <strong>정답:</strong> +10점 획득 및 푸들의 환호!</li>
+            <li>💥 <strong>오답 / 타임아웃:</strong> -5점 감점 및 화면 흔들림!</li>
+            <li>🏆 <strong>20라운드</strong>를 마친 후 시상대에서 최종 순위가 공개됩니다!</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- Screen 2: In-Game Screen -->
+    <section id="screen-game" class="screen">
+      
+      <!-- Top In-Game Bar: Score, Round, Live Top 5 Leaderboard -->
+      <div class="game-top-bar">
+        <div class="my-status-box">
+          <div class="round-badge">라운드 <span id="game-round-text">1</span> / 20</div>
+          <div class="score-display">내 점수: <span id="game-score-text">0</span>점</div>
+        </div>
+
+        <!-- Mascot Feedback Area -->
+        <div class="game-mascot-box">
+          <div id="game-poodle" class="sprite-box mascot-ingame"></div>
+          <div id="poodle-bubble" class="poodle-speech-mini">준비... 출발!</div>
+        </div>
+
+        <!-- Live Realtime Top 5 Mini Leaderboard -->
+        <div class="mini-leaderboard">
+          <div class="mini-lead-title">🏆 실시간 TOP 5</div>
+          <ol id="mini-leaderboard-list" class="mini-lead-list">
+            <li><span>1위.</span> <span>로딩중...</span> <span>0점</span></li>
+          </ol>
+        </div>
+      </div>
+
+      <!-- 3-Second Speed Timer Gauge -->
+      <div class="timer-container">
+        <div class="timer-track">
+          <div id="timer-gauge" class="timer-bar"></div>
+        </div>
+        <div class="timer-label"><span id="timer-seconds-text">3.0</span>초</div>
+      </div>
+
+      <!-- Central Game Arena: Item Drag Spawn Area -->
+      <div id="game-arena" class="game-arena">
+        <div class="arena-center">
+          <!-- The draggable item card -->
+          <div id="drag-item-card" class="item-card" touch-action="none">
+            <div id="item-sprite" class="sprite-box item-sprite-view"></div>
+            <div id="item-name" class="item-name-tag">페트병</div>
+          </div>
+          <div id="item-hint-text" class="item-hint">올바른 수거함으로 끌어다 넣으세요!</div>
+        </div>
+
+        <!-- Floating Score Effect Box -->
+        <div id="floating-score-container" class="floating-container"></div>
+      </div>
+
+      <!-- Bottom Bins: 4 Recycle Bins from Sprite Sheet -->
+      <div class="bins-container">
+        <!-- Plastic Bin (Blue) -->
+        <div class="bin-slot" data-bin="plastic">
+          <div id="bin-sprite-plastic" class="sprite-box bin-sprite-view"></div>
+          <div class="bin-label label-plastic">플라스틱 (파랑)</div>
+        </div>
+
+        <!-- Paper Bin (Yellow) -->
+        <div class="bin-slot" data-bin="paper">
+          <div id="bin-sprite-paper" class="sprite-box bin-sprite-view"></div>
+          <div class="bin-label label-paper">종이 (노랑)</div>
+        </div>
+
+        <!-- Metal/Can Bin (Green) -->
+        <div class="bin-slot" data-bin="can">
+          <div id="bin-sprite-can" class="sprite-box bin-sprite-view"></div>
+          <div class="bin-label label-can">캔/고철 (초록)</div>
+        </div>
+
+        <!-- Trash Bin (Red) -->
+        <div class="bin-slot" data-bin="trash">
+          <div id="bin-sprite-trash" class="sprite-box bin-sprite-view"></div>
+          <div class="bin-label label-trash">일반쓰레기 (빨강)</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Screen 3: Podium & Results Screen -->
+    <section id="screen-podium" class="screen">
+      <div class="podium-card">
+        <h2 class="podium-title">🎉 20라운드 완주! 영광의 시상대 🎉</h2>
+        <p class="podium-subtitle">오늘의 분리수거 지구 수호 챔피언을 발표합니다!</p>
+
+        <!-- Sprite Podium with 1st, 2nd, 3rd Players -->
+        <div class="podium-stage-wrapper">
+          <div class="podium-pedestals">
+            <!-- 2nd Place -->
+            <div class="pedestal-col rank-2">
+              <div id="podium-player-2" class="podium-avatar">
+                <span class="avatar-icon">🥈</span>
+                <span class="podium-name">-</span>
+                <span class="podium-score">0점</span>
+              </div>
+              <div class="pedestal-block block-2">2위</div>
+            </div>
+
+            <!-- 1st Place (Highest) -->
+            <div class="pedestal-col rank-1">
+              <div id="podium-player-1" class="podium-avatar winner">
+                <div class="crown">👑</div>
+                <span class="avatar-icon">🥇</span>
+                <span class="podium-name">-</span>
+                <span class="podium-score">0점</span>
+              </div>
+              <div class="pedestal-block block-1">1위</div>
+            </div>
+
+            <!-- 3rd Place -->
+            <div class="pedestal-col rank-3">
+              <div id="podium-player-3" class="podium-avatar">
+                <span class="avatar-icon">🥉</span>
+                <span class="podium-name">-</span>
+                <span class="podium-score">0점</span>
+              </div>
+              <div class="pedestal-block block-3">3위</div>
+            </div>
+          </div>
+
+          <!-- Sprite Podium Background Asset -->
+          <div id="sprite-podium-asset" class="sprite-box podium-sprite-view"></div>
+        </div>
+
+        <!-- My Final Record Box -->
+        <div class="my-final-summary">
+          <div class="summary-box">
+            <span class="sum-label">내 최종 점수</span>
+            <span id="my-final-score" class="sum-val">0점</span>
+          </div>
+          <div class="summary-box">
+            <span class="sum-label">내 순위</span>
+            <span id="my-final-rank" class="sum-val">-위</span>
+          </div>
+          <div class="summary-box">
+            <span class="sum-label">환경 지킴이 등급</span>
+            <span id="my-final-badge" class="sum-badge">🌱 분리수거 새싹</span>
+          </div>
+        </div>
+
+        <!-- Full Results Table -->
+        <div class="full-leaderboard-box">
+          <h3>전체 랭킹 리더보드</h3>
+          <div class="table-scroll">
+            <table class="lead-table">
+              <thead>
+                <tr>
+                  <th>순위</th>
+                  <th>닉네임</th>
+                  <th>최종 점수</th>
+                </tr>
+              </thead>
+              <tbody id="full-leaderboard-body">
+                <!-- Dynamically filled -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="podium-actions">
+          <button id="btn-return-lobby" class="btn btn-primary btn-large">
+            🔄 대기실로 돌아가 다시 도전하기
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Firebase Config Modal -->
+    <div id="modal-firebase" class="modal-backdrop">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h3>🔥 Firebase Realtime Database 연동 설정</h3>
+          <button id="btn-close-modal" class="close-x">&times;</button>
+        </div>
+        <div class="modal-body">
+          <p class="modal-desc">
+            Firebase Console에서 Realtime Database 프로젝트를 생성하고,
+            아래에 Firebase Config 정보를 입력하면 전 세계 어디서든 실시간 동기화가 가능합니다.
+            <br><small>(입력하지 않아도 같은 컴퓨터 내 여러 탭/창 간에는 '가상 멀티플레이'로 즉시 작동합니다!)</small>
+          </p>
+
+          <div class="input-group">
+            <label>Database URL</label>
+            <input type="text" id="fb-database-url" placeholder="https://your-project-default-rtdb.firebaseio.com">
+          </div>
+          <div class="input-group">
+            <label>API Key</label>
+            <input type="text" id="fb-api-key" placeholder="AIzaSy...">
+          </div>
+          <div class="input-group">
+            <label>Project ID</label>
+            <input type="text" id="fb-project-id" placeholder="your-project-id">
+          </div>
+          <div class="input-group">
+            <label>App ID</label>
+            <input type="text" id="fb-app-id" placeholder="1:123456789:web:abcdef...">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button id="btn-save-firebase" class="btn btn-success">연동 및 저장</button>
+          <button id="btn-reset-firebase" class="btn btn-secondary">기본 가상 모드로 초기화</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Game Logic Script (Module) -->
+  <script type="module" src="game.js"></script>
+</body>
+</html>
