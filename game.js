@@ -9,7 +9,7 @@ class WasteGame {
     this.score = 0;
     this.currentItem = null;
     this.timerInterval = null;
-    this.remainingTime = 3000; // 3 seconds in ms
+    this.remainingTime = 5000; // 5 seconds in ms
     this.timerStartTime = 0;
     this.isAnswering = false;
 
@@ -249,27 +249,27 @@ class WasteGame {
     // Reset Poodle Mood
     this.setPoodleMood('idle', '어디에 버려야 할까? 🤔');
 
-    // Start 3-second Speed Timer
+    // Start 5-second Speed Timer
     this.startTimer();
   }
 
   startTimer() {
     if (this.timerInterval) clearInterval(this.timerInterval);
 
-    this.remainingTime = 3000;
+    this.remainingTime = 5000;
     this.timerStartTime = performance.now();
     this.timerGauge.style.width = '100%';
     this.timerGauge.classList.remove('urgent');
-    this.timerSecondsText.textContent = '3.0';
+    this.timerSecondsText.textContent = '5.0';
 
     this.timerInterval = setInterval(() => {
       const elapsed = performance.now() - this.timerStartTime;
-      this.remainingTime = Math.max(0, 3000 - elapsed);
-      const percent = (this.remainingTime / 3000) * 100;
+      this.remainingTime = Math.max(0, 5000 - elapsed);
+      const percent = (this.remainingTime / 5000) * 100;
       this.timerGauge.style.width = `${percent}%`;
       this.timerSecondsText.textContent = (this.remainingTime / 1000).toFixed(1);
 
-      if (this.remainingTime <= 1000) {
+      if (this.remainingTime <= 1500) {
         this.timerGauge.classList.add('urgent');
         sound.playTick();
       }
@@ -293,7 +293,7 @@ class WasteGame {
     sound.playWrong();
     this.triggerScreenShake();
     this.showFloatingScore(-5);
-    this.setPoodleMood('wrong', '시간 초과! 3초는 빨라요 ⏰');
+    this.setPoodleMood('wrong', '시간 초과! 5초가 다 지났어요 ⏰');
 
     // Advance to next round instantly
     setTimeout(() => {
