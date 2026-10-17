@@ -17,7 +17,7 @@ export const DEFAULT_FIREBASE_CONFIG = {
   // storageBucket: "your-project.appspot.com",
   // messagingSenderId: "123456789",
   // appId: "1:123456789:web:abcdef"
-  databaseURL: "",
+  databaseURL: "https://waste-game-87be1-default-rtdb.firebaseio.com/https://waste-game-87be1-default-rtdb.firebaseio.com/",
   apiKey: "",
   projectId: "",
   appId: ""
