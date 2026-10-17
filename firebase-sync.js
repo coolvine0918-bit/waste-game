@@ -5,7 +5,7 @@
  * and Broadcast Events with robust reconnection and error handling.
  */
 
-import { getActiveFirebaseConfig } from './firebase-config.js?v=20261017_4';
+import { getActiveFirebaseConfig } from './firebase-config.js?v=20261017_5';
 
 class MultiplaySync {
   constructor() {

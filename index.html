@@ -3,6 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
   <title>실시간 5초 분리수거 대작전 🌍 | 1분 타임어택 교실 멀티플레이</title>
   
   <!-- Google Fonts for Friendly Korean Typography -->
@@ -28,7 +31,7 @@
     } catch(e) {}
   </script>
 
-  <link rel="stylesheet" href="style.css?v=20261017_4">
+  <link rel="stylesheet" href="style.css?v=20261017_5">
 </head>
 <body>
   <div id="app" class="app-container">
@@ -64,7 +67,7 @@
           <div id="lobby-poodle" class="sprite-box poodle-preview"></div>
           <div class="speech-bubble">
             안녕! 난 환경지킴이 푸들이야 🐶<br>
-            선생님이 게임을 시작하면 <strong>1분 동안</strong> 최대한 많은 쓰레기를 올바르게 분리수거해봐!
+            선생님이 게임을 시작하면 학생들은 <strong>1분 동안</strong> 신나는 분리수거 대결을 펼치게 돼!
           </div>
         </div>
 
@@ -74,8 +77,14 @@
             🧑‍🎓 학생으로 참가
           </button>
           <button id="tab-teacher" class="role-tab" data-role="teacher">
-            👨‍🏫 선생님 (방 개설 & 진행)
+            👨‍🏫 선생님 (방 개설 & 진행 전용)
           </button>
+        </div>
+
+        <!-- Role Notice Box -->
+        <div id="teacher-role-guide" class="teacher-role-guide-box" style="display: none;">
+          👑 <strong>선생님 모드:</strong> 선생님은 쓰레기를 버리는 게임을 직접 하지 않습니다.<br>
+          방을 개설하고 학생들을 입장시킨 후, 시작 버튼을 눌러 <strong>1분 동안 실시간 모니터링 및 진행</strong>을 담당합니다.
         </div>
 
         <!-- Entry Form -->
@@ -104,7 +113,7 @@
 
           <!-- Realtime Player List Grid -->
           <div class="player-list-section">
-            <div class="section-title">접속한 친구들 목록</div>
+            <div class="section-title">접속한 학생 목록</div>
             <div id="player-list-grid" class="player-grid">
               <!-- Dynamically populated -->
             </div>
@@ -113,11 +122,12 @@
           <!-- TEACHER ACTION AREA: Only visible to Teacher -->
           <div id="teacher-action-area" class="teacher-box" style="display: none;">
             <div class="teacher-notice">
-              📢 <strong>선생님 전용 컨트롤 (관전/진행 모드):</strong><br>
-              학생들이 모두 입장하면 아래 버튼을 눌러주세요. 선생님은 직접 플레이하지 않고 <strong>실시간 관전 대시보드</strong>로 전환됩니다!
+              📢 <strong>선생님 전용 컨트롤:</strong><br>
+              학생들이 모두 입장하면 아래 버튼을 눌러 게임을 시작하세요.<br>
+              선생님 화면은 자동으로 <strong>1분 실시간 관전 대시보드</strong>로 전환되며 직접 플레이하지 않습니다!
             </div>
             <button id="btn-start-game" class="btn btn-success btn-large pulse-btn">
-              🚀 전체 학생 게임 시작! (1분 타임어택)
+              🚀 학생 게임 시작하기! (1분 타임어택)
             </button>
           </div>
 
@@ -142,13 +152,13 @@
             <li>⚡ <strong>5초 스피드!</strong> 한 문제당 5초 안에 드래그해야 점수를 얻어요.</li>
             <li>✨ <strong>정답:</strong> +10점 획득 및 푸들의 환호!</li>
             <li>💥 <strong>오답 / 5초 초과:</strong> -5점 감점 및 다음 문제로 넘어감!</li>
-            <li>🏆 <strong>1분 종료 후:</strong> 실시간 시상대와 전체 순위표가 공개됩니다!</li>
+            <li>🏆 <strong>1분 종료 후:</strong> 시상대와 함께 1등부터 꼴등까지 전체 리포트가 공개됩니다!</li>
           </ul>
         </div>
       </div>
     </section>
 
-    <!-- Screen 2: In-Game Screen (STUDENTS ONLY) -->
+    <!-- Screen 2-A: Student In-Game Screen (STUDENTS ONLY - TEACHER CANNOT ACCESS) -->
     <section id="screen-game" class="screen">
       
       <!-- 1-Minute Main Game Timer Header -->
@@ -243,8 +253,8 @@
         
         <div class="dashboard-header">
           <div class="dash-title-group">
-            <span class="dash-badge">👨‍🏫 교사용 실시간 관전 & 진행 대시보드</span>
-            <h2>교실 분리수거 타임어택 진행 중</h2>
+            <span class="dash-badge">👨‍🏫 선생님 실시간 관전 & 진행 모드</span>
+            <h2>학생들 1분 분리수거 레이스 진행 중</h2>
           </div>
           <div class="dash-meta">
             방 코드: <strong id="dash-room-code">class1</strong> | 
@@ -261,13 +271,13 @@
           <div class="dash-progress-track">
             <div id="teacher-timer-bar" class="dash-progress-fill"></div>
           </div>
-          <div class="dash-timer-tip">💡 1분이 지나면 전체 학생 화면이 자동으로 시상대로 전환됩니다.</div>
+          <div class="dash-timer-tip">💡 1분이 지나면 자동으로 시상대로 이동하며 전체 리포트를 확인하실 수 있습니다.</div>
         </div>
 
         <!-- Live Realtime Student Scoreboard -->
         <div class="dash-scoreboard-card">
           <div class="scoreboard-header">
-            <h3>📊 학생 실시간 라이브 랭킹 (실시간 점수 반영)</h3>
+            <h3>📊 학생 실시간 라이브 랭킹</h3>
             <span class="live-dot-badge">🔴 LIVE</span>
           </div>
           <div class="table-scroll">
@@ -363,14 +373,14 @@
         <div id="teacher-final-summary" class="teacher-podium-notice" style="display: none;">
           <div class="teacher-notice-box">
             👨‍🏫 <strong>1분 타임어택이 종료되었습니다!</strong><br>
-            아래 <strong>[결과보기 버튼]</strong>을 눌러 1등부터 꼴등까지 전체 학생 순위를 확인하세요.
+            아래 <strong>[전체 리포트 확인 버튼]</strong>을 눌러 1등부터 꼴등까지 전체 학생 순위를 확인하세요.
           </div>
         </div>
 
         <!-- VIEW RESULTS BUTTON (KEY USER REQUIREMENT) -->
         <div class="view-results-action">
           <button id="btn-view-results" class="btn btn-primary btn-large pulse-btn">
-            📊 1등부터 꼴등까지 전체 순위 결과보기 🔍
+            📋 전체 리포트: 1등부터 꼴등까지 순위 보기 🔍
           </button>
         </div>
 
@@ -387,7 +397,7 @@
     <div id="modal-full-results" class="modal-backdrop">
       <div class="modal-card full-results-card">
         <div class="modal-header">
-          <h3>🏆 전체 학생 순위표 (1등 ~ 꼴등)</h3>
+          <h3>📋 전체 학생 순위 리포트 (1등 ~ 꼴등)</h3>
           <button id="btn-close-results" class="close-x">&times;</button>
         </div>
         <div class="modal-body">
@@ -458,6 +468,6 @@
   </div>
 
   <!-- Game Logic Script (Module) -->
-  <script type="module" src="game.js?v=20261017_4"></script>
+  <script type="module" src="game.js?v=20261017_5"></script>
 </body>
 </html>
