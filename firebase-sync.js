@@ -5,7 +5,7 @@
  * and Broadcast Events with robust reconnection and error handling.
  */
 
-import { getActiveFirebaseConfig } from './firebase-config.js?v=20261017_3';
+import { getActiveFirebaseConfig } from './firebase-config.js?v=20261017_4';
 
 class MultiplaySync {
   constructor() {
@@ -257,18 +257,19 @@ class MultiplaySync {
 
   /**
    * 선생님이 누르는 [게임 시작] 신호 (전체 학생 화면 동시 전환)
-   * @param {Array<number>} itemOrder - 선택 사항: 20개 문제 인덱스 순서
+   * @param {Array<number>} itemOrder - 퀴즈 문제 인덱스 순서
+   * @param {number} durationSeconds - 게임 진행 시간(초) (기본 60초 = 1분)
    */
-  broadcastGameStart(itemOrder = null) {
+  broadcastGameStart(itemOrder = null, durationSeconds = 60) {
     const payload = {
       status: 'playing',
       startedAt: Date.now(),
       startedBy: this.playerName,
-      roundCount: 20,
+      duration: durationSeconds, // 1분(60초) 타임어택!
       itemOrder: itemOrder
     };
 
-    console.log('[MultiplaySync] Broadcasting game start to room:', this.roomId);
+    console.log('[MultiplaySync] Broadcasting game start (1 min time attack) to room:', this.roomId);
 
     if (this.isFirebaseReady && this.database) {
       // Reset all players scores in this room before starting

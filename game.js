@@ -1,18 +1,24 @@
-import { BINS, MASCOTS, UI_ASSETS, ITEMS, applySprite } from './sprite.js?v=20261017_3';
-import { sound } from './sound.js?v=20261017_3';
-import { multiplay } from './firebase-sync.js?v=20261017_3';
-import { getActiveFirebaseConfig, sanitizeFirebaseUrl, DEFAULT_FIREBASE_CONFIG } from './firebase-config.js?v=20261017_3';
+import { BINS, MASCOTS, UI_ASSETS, ITEMS, applySprite } from './sprite.js?v=20261017_4';
+import { sound } from './sound.js?v=20261017_4';
+import { multiplay } from './firebase-sync.js?v=20261017_4';
+import { getActiveFirebaseConfig, sanitizeFirebaseUrl, DEFAULT_FIREBASE_CONFIG } from './firebase-config.js?v=20261017_4';
 
 class WasteGame {
   constructor() {
     this.currentRound = 1;
-    this.maxRounds = 20;
     this.score = 0;
     this.currentItem = null;
-    this.timerInterval = null;
-    this.remainingTime = 5000; // 5 seconds in ms
-    this.timerStartTime = 0;
+    
+    // 5-second per-item speed timer
+    this.itemTimerInterval = null;
+    this.remainingItemTime = 5000;
+    this.itemTimerStartTime = 0;
     this.isAnswering = false;
+
+    // 1-minute (60s) main game timer
+    this.mainTimerInterval = null;
+    this.gameDuration = 60; // 60 seconds
+    this.gameStartedAt = 0;
 
     // Draggable card pointer state
     this.isDragging = false;
@@ -36,10 +42,12 @@ class WasteGame {
     // Screens
     this.screenLobby = document.getElementById('screen-lobby');
     this.screenGame = document.getElementById('screen-game');
+    this.screenTeacherDashboard = document.getElementById('screen-teacher-dashboard');
     this.screenPodium = document.getElementById('screen-podium');
 
     // Header & Badges
     this.currentRoomText = document.getElementById('current-room-text');
+    this.headerStudentCount = document.getElementById('header-student-count');
     this.roleBadge = document.getElementById('role-badge');
     this.modeBadge = document.getElementById('mode-badge');
     this.btnSound = document.getElementById('btn-sound');
@@ -47,7 +55,7 @@ class WasteGame {
     this.firebaseWarningBanner = document.getElementById('firebase-warning-banner');
     this.btnBannerConfig = document.getElementById('btn-banner-config');
 
-    // Lobby Role Selector
+    // Lobby Elements
     this.tabStudent = document.getElementById('tab-student');
     this.tabTeacher = document.getElementById('tab-teacher');
     this.labelNickname = document.getElementById('label-nickname');
@@ -55,10 +63,10 @@ class WasteGame {
     this.inputRoom = document.getElementById('input-room');
     this.btnEnterRoom = document.getElementById('btn-enter-room');
 
-    // Lobby Waiting Area
     this.lobbyRoomArea = document.getElementById('lobby-room-area');
     this.displayRoomCode = document.getElementById('display-room-code');
     this.playerCount = document.getElementById('player-count');
+    this.lobbyStudentCount = document.getElementById('lobby-student-count');
     this.hostTag = document.getElementById('host-tag');
     this.playerListGrid = document.getElementById('player-list-grid');
     this.teacherActionArea = document.getElementById('teacher-action-area');
@@ -66,7 +74,9 @@ class WasteGame {
     this.studentWaitingArea = document.getElementById('student-waiting-area');
     this.lobbyPoodle = document.getElementById('lobby-poodle');
 
-    // Game Elements
+    // Student In-Game Elements
+    this.mainTimerSeconds = document.getElementById('main-timer-seconds');
+    this.mainTimerBar = document.getElementById('main-timer-bar');
     this.gameRoundText = document.getElementById('game-round-text');
     this.gameScoreText = document.getElementById('game-score-text');
     this.gamePoodle = document.getElementById('game-poodle');
@@ -82,25 +92,38 @@ class WasteGame {
     this.floatingScoreContainer = document.getElementById('floating-score-container');
     this.binSlots = document.querySelectorAll('.bin-slot');
 
-    // Finished Overlay
     this.finishedOverlay = document.getElementById('finished-overlay');
     this.finishedMyScore = document.getElementById('finished-my-score');
-    this.teacherForcePodium = document.getElementById('teacher-force-podium');
-    this.btnForcePodium = document.getElementById('btn-force-podium');
+
+    // Teacher Dashboard Elements
+    this.dashRoomCode = document.getElementById('dash-room-code');
+    this.dashStudentCount = document.getElementById('dash-student-count');
+    this.teacherTimerSeconds = document.getElementById('teacher-timer-seconds');
+    this.teacherTimerBar = document.getElementById('teacher-timer-bar');
+    this.teacherScoreboardBody = document.getElementById('teacher-scoreboard-body');
+    this.btnTeacherForceStop = document.getElementById('btn-teacher-force-stop');
 
     // Podium Elements
     this.podiumPlayer1 = document.getElementById('podium-player-1');
     this.podiumPlayer2 = document.getElementById('podium-player-2');
     this.podiumPlayer3 = document.getElementById('podium-player-3');
     this.spritePodiumAsset = document.getElementById('sprite-podium-asset');
+    this.studentFinalSummary = document.getElementById('student-final-summary');
+    this.teacherFinalSummary = document.getElementById('teacher-final-summary');
     this.myFinalScore = document.getElementById('my-final-score');
     this.myFinalRank = document.getElementById('my-final-rank');
     this.myFinalBadge = document.getElementById('my-final-badge');
-    this.fullRankCount = document.getElementById('full-rank-count');
-    this.fullLeaderboardBody = document.getElementById('full-leaderboard-body');
+    this.btnViewResults = document.getElementById('btn-view-results');
     this.btnReturnLobby = document.getElementById('btn-return-lobby');
 
-    // Modal
+    // Full Results Modal
+    this.modalFullResults = document.getElementById('modal-full-results');
+    this.btnCloseResults = document.getElementById('btn-close-results');
+    this.btnConfirmResults = document.getElementById('btn-confirm-results');
+    this.resultsStudentCount = document.getElementById('results-student-count');
+    this.fullResultsTbody = document.getElementById('full-results-tbody');
+
+    // Firebase Modal
     this.modalFirebase = document.getElementById('modal-firebase');
     this.btnCloseModal = document.getElementById('btn-close-modal');
     this.btnSaveFirebase = document.getElementById('btn-save-firebase');
@@ -180,7 +203,7 @@ class WasteGame {
       this.handleEnterRoom();
     });
 
-    // Start Game Button in Lobby (TEACHER ONLY)
+    // Start Game Button in Lobby (TEACHER ONLY - 1 MINUTE ATTACK)
     this.btnStartGame.addEventListener('click', () => {
       if (!multiplay.isTeacher()) {
         alert('게임 시작 권한은 선생님에게만 있습니다.');
@@ -188,21 +211,33 @@ class WasteGame {
       }
       sound.playGameStart();
 
-      // 전체 학생이 동일한 20개 문제를 풀 수 있도록 인덱스 순서 생성
+      // 전체 학생이 동일한 퀴즈를 풀 수 있도록 문제 인덱스 셔플
       const totalItems = ITEMS.length;
-      const shuffledIndexes = [...Array(totalItems).keys()]
-        .sort(() => 0.5 - Math.random())
-        .slice(0, this.maxRounds);
+      const shuffledIndexes = [...Array(totalItems).keys()].sort(() => 0.5 - Math.random());
 
-      multiplay.broadcastGameStart(shuffledIndexes);
+      // 1분(60초) 타임어택 신호 브로드캐스트
+      multiplay.broadcastGameStart(shuffledIndexes, 60);
     });
 
-    // Force Podium (Teacher in overlay)
-    this.btnForcePodium.addEventListener('click', () => {
-      multiplay.broadcastGameOver();
+    // Teacher Force Stop in Dashboard
+    this.btnTeacherForceStop.addEventListener('click', () => {
+      if (confirm('게임을 즉시 종료하고 시상대로 이동하시겠습니까?')) {
+        multiplay.broadcastGameOver();
+      }
     });
 
-    // Return to Lobby Button
+    // View Results Button (Podium) -> Open Full Results Modal (1st to Last)
+    this.btnViewResults.addEventListener('click', () => {
+      this.openFullResultsModal();
+    });
+
+    const closeResultsModal = () => {
+      this.modalFullResults.classList.remove('active');
+    };
+    this.btnCloseResults.addEventListener('click', closeResultsModal);
+    this.btnConfirmResults.addEventListener('click', closeResultsModal);
+
+    // Return to Lobby Button (Teacher Only)
     this.btnReturnLobby.addEventListener('click', () => {
       if (multiplay.isTeacher()) {
         multiplay.broadcastReturnToLobby();
@@ -212,9 +247,9 @@ class WasteGame {
     });
 
     // Firebase Modal Open/Close
-    const openModal = () => this.modalFirebase.classList.add('active');
-    this.btnFirebaseModal.addEventListener('click', openModal);
-    this.btnBannerConfig.addEventListener('click', openModal);
+    const openFirebaseModal = () => this.modalFirebase.classList.add('active');
+    this.btnFirebaseModal.addEventListener('click', openFirebaseModal);
+    this.btnBannerConfig.addEventListener('click', openFirebaseModal);
 
     this.btnCloseModal.addEventListener('click', () => {
       this.modalFirebase.classList.remove('active');
@@ -246,25 +281,28 @@ class WasteGame {
 
     multiplay.onPlayersChange((players) => {
       this.playersList = players;
+      this.updatePlayerCounts(players);
       this.renderPlayerList(players);
       this.renderLeaderboard(players);
+      this.renderTeacherDashboardScoreboard(players);
     });
 
     multiplay.onGameStateChange((state) => {
       if (state.status === 'playing') {
-        // 대기실에 입장한 상태라면 교사이든 학생이든 즉시 게임 화면으로 진입!
-        if (this.hasJoinedLobby && !this.screenGame.classList.contains('active')) {
-          this.startGameFlow(state.itemOrder);
+        if (this.hasJoinedLobby) {
+          if (multiplay.isTeacher()) {
+            // 교사: 관전 및 진행 대시보드로 전환! (직접 게임하지 않음)
+            this.startTeacherDashboard(state);
+          } else {
+            // 학생: 1분 타임어택 게임 플레이 화면으로 전환!
+            this.startStudentGameFlow(state);
+          }
         }
       } else if (state.status === 'podium') {
-        if (!this.screenPodium.classList.contains('active')) {
-          this.showPodiumScreen();
-        }
+        this.showPodiumScreen();
       } else if (state.status === 'lobby') {
-        if (!this.screenLobby.classList.contains('active')) {
-          this.showScreen('lobby');
-          this.resetLobbyState();
-        }
+        this.showScreen('lobby');
+        this.resetLobbyState();
       }
     });
 
@@ -272,7 +310,7 @@ class WasteGame {
       console.warn('[MultiplaySync Error Alert]', err);
     });
 
-    // Resize recalculation
+    // Window Resize recalculation
     window.addEventListener('resize', () => {
       if (this.currentItem) {
         applySprite(this.itemSprite, this.currentItem.rect, 100, 100);
@@ -306,12 +344,15 @@ class WasteGame {
   showScreen(screenName) {
     this.screenLobby.classList.remove('active');
     this.screenGame.classList.remove('active');
+    this.screenTeacherDashboard.classList.remove('active');
     this.screenPodium.classList.remove('active');
 
     if (screenName === 'lobby') {
       this.screenLobby.classList.add('active');
     } else if (screenName === 'game') {
       this.screenGame.classList.add('active');
+    } else if (screenName === 'teacher-dashboard') {
+      this.screenTeacherDashboard.classList.add('active');
     } else if (screenName === 'podium') {
       this.screenPodium.classList.add('active');
     }
@@ -327,6 +368,7 @@ class WasteGame {
 
     this.currentRoomText.textContent = room;
     this.displayRoomCode.textContent = room;
+    this.dashRoomCode.textContent = room;
     this.lobbyRoomArea.style.display = 'block';
     this.btnEnterRoom.textContent = '입장 완료 ✅';
     this.btnEnterRoom.disabled = true;
@@ -340,18 +382,17 @@ class WasteGame {
       this.teacherActionArea.style.display = 'block';
       this.studentWaitingArea.style.display = 'none';
       this.hostTag.textContent = `진행자: ${nick} (나)`;
-      this.teacherForcePodium.style.display = 'block';
     } else {
       this.teacherActionArea.style.display = 'none';
       this.studentWaitingArea.style.display = 'block';
       this.hostTag.textContent = '진행자: 선생님';
-      this.teacherForcePodium.style.display = 'none';
     }
 
     sound.playPickup();
   }
 
   resetLobbyState() {
+    this.clearAllTimers();
     this.finishedOverlay.style.display = 'none';
     this.btnEnterRoom.disabled = false;
     this.btnEnterRoom.textContent = (this.selectedRole === 'teacher') ? '교사 대기실 열기 👑' : '대기실 입장하기 🚪';
@@ -359,9 +400,29 @@ class WasteGame {
     this.inputRoom.disabled = false;
   }
 
+  updatePlayerCounts(players) {
+    const students = players.filter(p => p.role !== 'teacher');
+    const studentCount = students.length;
+
+    // Update Top Header Badge (ALWAYS VISIBLE)
+    if (this.headerStudentCount) {
+      this.headerStudentCount.textContent = studentCount;
+    }
+    // Update Lobby counts
+    if (this.playerCount) {
+      this.playerCount.textContent = players.length;
+    }
+    if (this.lobbyStudentCount) {
+      this.lobbyStudentCount.textContent = studentCount;
+    }
+    // Update Teacher Dashboard counts
+    if (this.dashStudentCount) {
+      this.dashStudentCount.textContent = studentCount;
+    }
+  }
+
   renderPlayerList(players) {
-    if (!this.playerCount) return;
-    this.playerCount.textContent = players.length;
+    if (!this.playerListGrid) return;
     this.playerListGrid.innerHTML = '';
 
     players.forEach(p => {
@@ -379,32 +440,140 @@ class WasteGame {
     });
   }
 
-  startGameFlow(itemOrder = null) {
+  // ==========================================
+  // TEACHER MODE: Live Dashboard (NO PLAYING)
+  // ==========================================
+  startTeacherDashboard(state) {
+    this.clearAllTimers();
+    this.showScreen('teacher-dashboard');
+
+    const duration = state.duration || 60;
+    const startedAt = state.startedAt || Date.now();
+    this.gameStartedAt = startedAt;
+    this.gameDuration = duration;
+
+    this.startMainTimer(startedAt, duration, (remaining) => {
+      // Teacher Timer Tick
+      const sec = Math.ceil(remaining);
+      this.teacherTimerSeconds.textContent = sec;
+      const percent = (remaining / duration) * 100;
+      this.teacherTimerBar.style.width = `${percent}%`;
+
+      if (remaining <= 0) {
+        // Automatically transition to podium when 1 minute expires
+        console.log('[TeacherDashboard] 1 minute finished! Broadcasting game over...');
+        multiplay.broadcastGameOver();
+      }
+    });
+
+    this.renderTeacherDashboardScoreboard(this.playersList);
+  }
+
+  renderTeacherDashboardScoreboard(players) {
+    if (!this.teacherScoreboardBody) return;
+
+    // Students only, sorted by score descending
+    const students = players
+      .filter(p => p.role !== 'teacher')
+      .sort((a, b) => (b.score || 0) - (a.score || 0));
+
+    this.teacherScoreboardBody.innerHTML = '';
+
+    if (students.length === 0) {
+      this.teacherScoreboardBody.innerHTML = `
+        <tr>
+          <td colspan="5" style="text-align: center; color: #94a3b8; padding: 20px;">
+            아직 접속한 학생이 없습니다.
+          </td>
+        </tr>
+      `;
+      return;
+    }
+
+    students.forEach((p, idx) => {
+      const tr = document.createElement('tr');
+      const rankIcon = idx === 0 ? '🥇 1위' : idx === 1 ? '🥈 2위' : idx === 2 ? '🥉 3위' : `${idx + 1}위`;
+      
+      tr.innerHTML = `
+        <td><strong>${rankIcon}</strong></td>
+        <td><strong>${this.escapeHtml(p.name)}</strong></td>
+        <td style="color: #e67e22; font-weight: 800; font-size: 1.05rem;">${p.score || 0}점</td>
+        <td>${p.round || 1}문제 풀이</td>
+        <td><span class="badge" style="background: #e0f2fe; color: #0284c7;">풀이 중 🔥</span></td>
+      `;
+      this.teacherScoreboardBody.appendChild(tr);
+    });
+  }
+
+  // ==========================================
+  // STUDENT MODE: 1-Minute Speed Time Attack
+  // ==========================================
+  startStudentGameFlow(state) {
+    this.clearAllTimers();
     this.currentRound = 1;
     this.score = 0;
     this.gameScoreText.textContent = this.score;
     this.gameRoundText.textContent = this.currentRound;
     this.finishedOverlay.style.display = 'none';
 
-    // 만약 선생님이 공유한 문제 순서가 있으면 동일하게 사용, 없으면 랜덤 셔플
-    if (Array.isArray(itemOrder) && itemOrder.length > 0) {
-      this.roundItemsList = itemOrder.map(idx => ITEMS[idx] || ITEMS[0]);
+    const duration = state.duration || 60;
+    const startedAt = state.startedAt || Date.now();
+    this.gameStartedAt = startedAt;
+    this.gameDuration = duration;
+
+    // Prepare item sequence
+    if (Array.isArray(state.itemOrder) && state.itemOrder.length > 0) {
+      this.roundItemsList = state.itemOrder.map(idx => ITEMS[idx] || ITEMS[0]);
     } else {
-      this.roundItemsList = [...ITEMS].sort(() => 0.5 - Math.random()).slice(0, this.maxRounds);
+      this.roundItemsList = [...ITEMS].sort(() => 0.5 - Math.random());
     }
 
     this.showScreen('game');
     this.loadRoundItem();
+
+    // Start 1-Minute Main Timer for Student
+    this.startMainTimer(startedAt, duration, (remaining) => {
+      const sec = Math.ceil(remaining);
+      this.mainTimerSeconds.textContent = sec;
+      const percent = (remaining / duration) * 100;
+      this.mainTimerBar.style.width = `${percent}%`;
+
+      if (sec <= 10) {
+        this.mainTimerBar.classList.add('urgent');
+      } else {
+        this.mainTimerBar.classList.remove('urgent');
+      }
+
+      if (remaining <= 0) {
+        this.handleTimeAttackFinished();
+      }
+    });
+  }
+
+  startMainTimer(startedAt, durationSeconds, onTick) {
+    if (this.mainTimerInterval) clearInterval(this.mainTimerInterval);
+
+    const update = () => {
+      const elapsed = (Date.now() - startedAt) / 1000;
+      const remaining = Math.max(0, durationSeconds - elapsed);
+      onTick(remaining);
+
+      if (remaining <= 0) {
+        clearInterval(this.mainTimerInterval);
+        this.mainTimerInterval = null;
+      }
+    };
+
+    update();
+    this.mainTimerInterval = setInterval(update, 200);
   }
 
   loadRoundItem() {
-    if (this.currentRound > this.maxRounds) {
-      this.handlePlayerFinished();
-      return;
-    }
-
     this.isAnswering = false;
-    this.currentItem = this.roundItemsList[this.currentRound - 1] || ITEMS[0];
+
+    // Cycle through items if player answers more than item pool
+    const itemIndex = (this.currentRound - 1) % this.roundItemsList.length;
+    this.currentItem = this.roundItemsList[itemIndex] || ITEMS[0];
 
     // Reset Drag Card
     this.resetCardPosition();
@@ -416,39 +585,39 @@ class WasteGame {
 
     this.setPoodleMood('idle', '어디에 버려야 할까? 🤔');
 
-    // Start 5-second Speed Timer
-    this.startTimer();
+    // Start 5-second per-item speed timer
+    this.startItemTimer();
   }
 
-  startTimer() {
-    if (this.timerInterval) clearInterval(this.timerInterval);
+  startItemTimer() {
+    if (this.itemTimerInterval) clearInterval(this.itemTimerInterval);
 
-    this.remainingTime = 5000;
-    this.timerStartTime = performance.now();
+    this.remainingItemTime = 5000;
+    this.itemTimerStartTime = performance.now();
     this.timerGauge.style.width = '100%';
     this.timerGauge.classList.remove('urgent');
     this.timerSecondsText.textContent = '5.0';
 
-    this.timerInterval = setInterval(() => {
-      const elapsed = performance.now() - this.timerStartTime;
-      this.remainingTime = Math.max(0, 5000 - elapsed);
-      const percent = (this.remainingTime / 5000) * 100;
+    this.itemTimerInterval = setInterval(() => {
+      const elapsed = performance.now() - this.itemTimerStartTime;
+      this.remainingItemTime = Math.max(0, 5000 - elapsed);
+      const percent = (this.remainingItemTime / 5000) * 100;
       this.timerGauge.style.width = `${percent}%`;
-      this.timerSecondsText.textContent = (this.remainingTime / 1000).toFixed(1);
+      this.timerSecondsText.textContent = (this.remainingItemTime / 1000).toFixed(1);
 
-      if (this.remainingTime <= 1500) {
+      if (this.remainingItemTime <= 1500) {
         this.timerGauge.classList.add('urgent');
         sound.playTick();
       }
 
-      if (this.remainingTime <= 0) {
-        clearInterval(this.timerInterval);
-        this.handleTimeout();
+      if (this.remainingItemTime <= 0) {
+        clearInterval(this.itemTimerInterval);
+        this.handleItemTimeout();
       }
     }, 40);
   }
 
-  handleTimeout() {
+  handleItemTimeout() {
     if (this.isAnswering) return;
     this.isAnswering = true;
 
@@ -464,13 +633,13 @@ class WasteGame {
     setTimeout(() => {
       this.currentRound++;
       this.loadRoundItem();
-    }, 450);
+    }, 400);
   }
 
   handleAnswer(selectedBinId) {
     if (this.isAnswering) return;
     this.isAnswering = true;
-    if (this.timerInterval) clearInterval(this.timerInterval);
+    if (this.itemTimerInterval) clearInterval(this.itemTimerInterval);
 
     const isCorrect = (selectedBinId === this.currentItem.bin);
 
@@ -500,26 +669,26 @@ class WasteGame {
     setTimeout(() => {
       this.currentRound++;
       this.loadRoundItem();
-    }, 420);
+    }, 380);
   }
 
-  handlePlayerFinished() {
-    if (this.timerInterval) clearInterval(this.timerInterval);
-    multiplay.updateScore(this.score, this.maxRounds, true);
+  handleTimeAttackFinished() {
+    this.clearAllTimers();
+    this.isAnswering = true;
+    multiplay.updateScore(this.score, this.currentRound, true);
 
     this.finishedMyScore.textContent = this.score;
     this.finishedOverlay.style.display = 'flex';
+  }
 
-    // If teacher, allow instant transition or wait for all
-    if (multiplay.isTeacher()) {
-      this.teacherForcePodium.style.display = 'block';
+  clearAllTimers() {
+    if (this.mainTimerInterval) {
+      clearInterval(this.mainTimerInterval);
+      this.mainTimerInterval = null;
     }
-
-    // Check if all players completed
-    const students = this.playersList.filter(p => p.role !== 'teacher');
-    const allFinished = students.length > 0 && students.every(p => p.completed === true);
-    if (allFinished) {
-      setTimeout(() => multiplay.broadcastGameOver(), 1200);
+    if (this.itemTimerInterval) {
+      clearInterval(this.itemTimerInterval);
+      this.itemTimerInterval = null;
     }
   }
 
@@ -629,16 +798,15 @@ class WasteGame {
     return null;
   }
 
-  // Leaderboard & Podium
+  // Mini In-Game Leaderboard for Students
   renderLeaderboard(players) {
     if (!players || !players.length) return;
 
-    // Filter students for student rankings
+    // Filter students only
     const sorted = [...players]
       .filter(p => p.role !== 'teacher')
       .sort((a, b) => (b.score || 0) - (a.score || 0));
 
-    // In-game Top 5
     if (this.miniLeaderboardList) {
       this.miniLeaderboardList.innerHTML = '';
       if (sorted.length === 0) {
@@ -655,27 +823,13 @@ class WasteGame {
         });
       }
     }
-
-    // Full Table
-    if (this.fullLeaderboardBody) {
-      this.fullLeaderboardBody.innerHTML = '';
-      this.fullRankCount.textContent = sorted.length;
-
-      sorted.forEach((p, idx) => {
-        const tr = document.createElement('tr');
-        if (p.id === multiplay.playerId) tr.classList.add('me-row');
-        tr.innerHTML = `
-          <td><strong>${idx + 1}위</strong></td>
-          <td>${this.escapeHtml(p.name)}</td>
-          <td>${p.id === multiplay.playerId ? '<span class="badge room-badge">나</span>' : '학생'}</td>
-          <td><strong>${p.score || 0}점</strong></td>
-        `;
-        this.fullLeaderboardBody.appendChild(tr);
-      });
-    }
   }
 
+  // ==========================================
+  // PODIUM & RESULTS (1ST TO LAST RANK)
+  // ==========================================
   showPodiumScreen() {
+    this.clearAllTimers();
     this.finishedOverlay.style.display = 'none';
     this.showScreen('podium');
     sound.playFanfare();
@@ -692,25 +846,36 @@ class WasteGame {
       .filter(p => p.role !== 'teacher')
       .sort((a, b) => (b.score || 0) - (a.score || 0));
 
+    // Top 3 Podium
     this.setPodiumPlayer(this.podiumPlayer1, students[0]);
     this.setPodiumPlayer(this.podiumPlayer2, students[1]);
     this.setPodiumPlayer(this.podiumPlayer3, students[2]);
 
-    this.myFinalScore.textContent = `${this.score}점`;
-    const myRank = students.findIndex(p => p.id === multiplay.playerId) + 1;
-    this.myFinalRank.textContent = myRank > 0 ? `${myRank}위` : '참여';
-
-    if (this.score >= 170) {
-      this.myFinalBadge.textContent = '👑 지구 수호 챔피언';
-    } else if (this.score >= 120) {
-      this.myFinalBadge.textContent = '🌟 분리수거 마스터';
-    } else if (this.score >= 70) {
-      this.myFinalBadge.textContent = '🌿 친환경 실천가';
+    if (multiplay.isTeacher()) {
+      // Teacher View in Podium
+      this.studentFinalSummary.style.display = 'none';
+      this.teacherFinalSummary.style.display = 'block';
+      this.btnReturnLobby.style.display = 'inline-block';
     } else {
-      this.myFinalBadge.textContent = '🌱 분리수거 새싹';
-    }
+      // Student View in Podium
+      this.studentFinalSummary.style.display = 'grid';
+      this.teacherFinalSummary.style.display = 'none';
+      this.btnReturnLobby.style.display = 'none';
 
-    this.renderLeaderboard(this.playersList);
+      this.myFinalScore.textContent = `${this.score}점`;
+      const myRank = students.findIndex(p => p.id === multiplay.playerId) + 1;
+      this.myFinalRank.textContent = myRank > 0 ? `${myRank}위` : '참여';
+
+      if (this.score >= 120) {
+        this.myFinalBadge.textContent = '👑 지구 수호 챔피언';
+      } else if (this.score >= 80) {
+        this.myFinalBadge.textContent = '🌟 분리수거 마스터';
+      } else if (this.score >= 40) {
+        this.myFinalBadge.textContent = '🌿 친환경 실천가';
+      } else {
+        this.myFinalBadge.textContent = '🌱 분리수거 새싹';
+      }
+    }
   }
 
   setPodiumPlayer(element, player) {
@@ -724,6 +889,56 @@ class WasteGame {
       nameEl.textContent = '-';
       scoreEl.textContent = '0점';
     }
+  }
+
+  /**
+   * [결과보기 버튼] 클릭 시 1등부터 꼴등까지 전체 순위 모달 표시
+   */
+  openFullResultsModal() {
+    const students = [...this.playersList]
+      .filter(p => p.role !== 'teacher')
+      .sort((a, b) => (b.score || 0) - (a.score || 0));
+
+    this.resultsStudentCount.textContent = students.length;
+    this.fullResultsTbody.innerHTML = '';
+
+    if (students.length === 0) {
+      this.fullResultsTbody.innerHTML = `
+        <tr>
+          <td colspan="5" style="text-align: center; padding: 20px; color: #94a3b8;">
+            참여한 학생 기록이 없습니다.
+          </td>
+        </tr>
+      `;
+    } else {
+      students.forEach((p, idx) => {
+        const isMe = (p.id === multiplay.playerId);
+        const tr = document.createElement('tr');
+        if (isMe) tr.className = 'me-row';
+
+        let medal = `${idx + 1}위`;
+        if (idx === 0) medal = '🥇 1위';
+        else if (idx === 1) medal = '🥈 2위';
+        else if (idx === 2) medal = '🥉 3위';
+
+        const score = p.score || 0;
+        let badge = '🌱 새싹';
+        if (score >= 120) badge = '👑 챔피언';
+        else if (score >= 80) badge = '🌟 마스터';
+        else if (score >= 40) badge = '🌿 실천가';
+
+        tr.innerHTML = `
+          <td><strong>${medal}</strong></td>
+          <td><strong>${this.escapeHtml(p.name)}</strong> ${isMe ? '<span class="badge room-badge">나</span>' : ''}</td>
+          <td style="color: #e67e22; font-weight: 800;">${score}점</td>
+          <td>${p.round || 1}문제</td>
+          <td><span class="badge" style="font-size: 0.75rem;">${badge}</span></td>
+        `;
+        this.fullResultsTbody.appendChild(tr);
+      });
+    }
+
+    this.modalFullResults.classList.add('active');
   }
 
   handleSaveFirebaseConfig() {

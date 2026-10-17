@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>실시간 5초 분리수거 대작전 🌍 | 모바일 멀티플레이</title>
+  <title>실시간 5초 분리수거 대작전 🌍 | 1분 타임어택 교실 멀티플레이</title>
   
   <!-- Google Fonts for Friendly Korean Typography -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -28,7 +28,7 @@
     } catch(e) {}
   </script>
 
-  <link rel="stylesheet" href="style.css?v=20261017_3">
+  <link rel="stylesheet" href="style.css?v=20261017_4">
 </head>
 <body>
   <div id="app" class="app-container">
@@ -41,6 +41,7 @@
       </div>
       <div class="header-controls">
         <div id="room-badge" class="badge room-badge">방: <span id="current-room-text">미입장</span></div>
+        <div id="student-count-badge" class="badge student-count-badge">👥 학생: <strong id="header-student-count">0</strong>명</div>
         <div id="role-badge" class="badge role-badge">학생</div>
         <div id="mode-badge" class="badge mode-badge status-offline">연결 확인 중...</div>
         <button id="btn-sound" class="icon-btn" title="사운드 온/오프">🔊</button>
@@ -63,7 +64,7 @@
           <div id="lobby-poodle" class="sprite-box poodle-preview"></div>
           <div class="speech-bubble">
             안녕! 난 환경지킴이 푸들이야 🐶<br>
-            교실 친구들과 함께 5초 안에 분리수거 퀴즈를 맞혀봐!
+            선생님이 게임을 시작하면 <strong>1분 동안</strong> 최대한 많은 쓰레기를 올바르게 분리수거해봐!
           </div>
         </div>
 
@@ -96,7 +97,7 @@
           <div class="room-header-box">
             <div class="room-info-left">
               <h3>🏫 방 코드: <span id="display-room-code" class="highlight-code">class1</span></h3>
-              <p class="room-subtext">현재 접속 중인 참가자: <strong id="player-count">0</strong>명</p>
+              <p class="room-subtext">현재 접속 중인 참가자: <strong id="player-count">0</strong>명 (학생 <strong id="lobby-student-count">0</strong>명)</p>
             </div>
             <div id="host-tag" class="host-badge">진행자: 선생님</div>
           </div>
@@ -112,11 +113,11 @@
           <!-- TEACHER ACTION AREA: Only visible to Teacher -->
           <div id="teacher-action-area" class="teacher-box" style="display: none;">
             <div class="teacher-notice">
-              📢 <strong>선생님 전용 컨트롤:</strong><br>
-              학생들이 모두 입장하면 아래 버튼을 눌러 게임을 시작해 주세요!
+              📢 <strong>선생님 전용 컨트롤 (관전/진행 모드):</strong><br>
+              학생들이 모두 입장하면 아래 버튼을 눌러주세요. 선생님은 직접 플레이하지 않고 <strong>실시간 관전 대시보드</strong>로 전환됩니다!
             </div>
             <button id="btn-start-game" class="btn btn-success btn-large pulse-btn">
-              🚀 전체 학생 게임 시작! (20라운드)
+              🚀 전체 학생 게임 시작! (1분 타임어택)
             </button>
           </div>
 
@@ -126,7 +127,7 @@
               <div class="spinner"></div>
               <p class="waiting-text">
                 ⏳ <strong>선생님이 게임을 시작할 때까지 대기 중입니다...</strong><br>
-                잠시만 기다려주세요! 🐶
+                선생님이 시작 버튼을 누르면 1분 동안 신나는 분리수거가 시작돼요! 🐶
               </p>
             </div>
           </div>
@@ -137,22 +138,32 @@
         <div class="rules-box">
           <h4>💡 게임 규칙</h4>
           <ul>
-            <li>⏱️ <strong>5초 스피드!</strong> 쓰레기가 나타나면 5초 안에 올바른 수거함으로 드래그!</li>
+            <li>⏱️ <strong>1분 타임어택!</strong> 1분(60초) 동안 최대한 많은 쓰레기를 올바르게 분리배출하세요!</li>
+            <li>⚡ <strong>5초 스피드!</strong> 한 문제당 5초 안에 드래그해야 점수를 얻어요.</li>
             <li>✨ <strong>정답:</strong> +10점 획득 및 푸들의 환호!</li>
-            <li>💥 <strong>오답 / 타임아웃:</strong> -5점 감점 및 화면 흔들림!</li>
-            <li>🏆 <strong>20라운드</strong> 후 전체 참가자의 점수로 시상대가 열립니다!</li>
+            <li>💥 <strong>오답 / 5초 초과:</strong> -5점 감점 및 다음 문제로 넘어감!</li>
+            <li>🏆 <strong>1분 종료 후:</strong> 실시간 시상대와 전체 순위표가 공개됩니다!</li>
           </ul>
         </div>
       </div>
     </section>
 
-    <!-- Screen 2: In-Game Screen -->
+    <!-- Screen 2: In-Game Screen (STUDENTS ONLY) -->
     <section id="screen-game" class="screen">
       
+      <!-- 1-Minute Main Game Timer Header -->
+      <div class="main-timer-banner">
+        <div class="main-timer-label">⏱️ 전체 남은 시간</div>
+        <div class="main-timer-digits"><span id="main-timer-seconds">60</span><span class="sec-unit">초</span></div>
+        <div class="main-timer-track">
+          <div id="main-timer-bar" class="main-timer-fill"></div>
+        </div>
+      </div>
+
       <!-- Top In-Game Bar -->
       <div class="game-top-bar">
         <div class="my-status-box">
-          <div class="round-badge">라운드 <span id="game-round-text">1</span> / 20</div>
+          <div class="round-badge">문제 <span id="game-round-text">1</span>번</div>
           <div class="score-display">내 점수: <span id="game-score-text">0</span>점</div>
         </div>
 
@@ -171,7 +182,7 @@
         </div>
       </div>
 
-      <!-- 5-Second Speed Timer Gauge -->
+      <!-- 5-Second Per-Item Speed Gauge -->
       <div class="timer-container">
         <div class="timer-track">
           <div id="timer-gauge" class="timer-bar"></div>
@@ -192,15 +203,12 @@
         <!-- Floating Score Effect Box -->
         <div id="floating-score-container" class="floating-container"></div>
 
-        <!-- Finished Waiting Overlay (When player finishes 20 rounds before others) -->
+        <!-- Time-Up Waiting Overlay (Shown when 1 minute expires) -->
         <div id="finished-overlay" class="finished-overlay" style="display: none;">
           <div class="finished-modal">
-            <h3>🎉 20라운드 완주 성공!</h3>
+            <h3>⏱️ 1분 타임어택 종료!</h3>
             <p>내 최종 점수: <strong id="finished-my-score">0</strong>점</p>
-            <p class="wait-subtext">다른 친구들이 문제를 모두 풀 때까지 잠시 대기합니다... 🐶</p>
-            <div id="teacher-force-podium" style="display: none; margin-top: 15px;">
-              <button id="btn-force-podium" class="btn btn-primary">🏆 지금 바로 시상대로 이동하기</button>
-            </div>
+            <p class="wait-subtext">잠시 후 영광의 시상대로 이동합니다... 🐶🏆</p>
           </div>
         </div>
       </div>
@@ -229,11 +237,72 @@
       </div>
     </section>
 
+    <!-- Screen 2-B: Teacher Dashboard Screen (TEACHER ONLY - NO PLAYING) -->
+    <section id="screen-teacher-dashboard" class="screen">
+      <div class="teacher-dashboard-card">
+        
+        <div class="dashboard-header">
+          <div class="dash-title-group">
+            <span class="dash-badge">👨‍🏫 교사용 실시간 관전 & 진행 대시보드</span>
+            <h2>교실 분리수거 타임어택 진행 중</h2>
+          </div>
+          <div class="dash-meta">
+            방 코드: <strong id="dash-room-code">class1</strong> | 
+            참가 학생: <strong id="dash-student-count">0</strong>명
+          </div>
+        </div>
+
+        <!-- Teacher 1-Minute Live Clock -->
+        <div class="dash-timer-card">
+          <div class="dash-timer-title">⏱️ 1분 타임어택 남은 시간</div>
+          <div class="dash-clock-display">
+            <span id="teacher-timer-seconds">60</span><span class="unit">초</span>
+          </div>
+          <div class="dash-progress-track">
+            <div id="teacher-timer-bar" class="dash-progress-fill"></div>
+          </div>
+          <div class="dash-timer-tip">💡 1분이 지나면 전체 학생 화면이 자동으로 시상대로 전환됩니다.</div>
+        </div>
+
+        <!-- Live Realtime Student Scoreboard -->
+        <div class="dash-scoreboard-card">
+          <div class="scoreboard-header">
+            <h3>📊 학생 실시간 라이브 랭킹 (실시간 점수 반영)</h3>
+            <span class="live-dot-badge">🔴 LIVE</span>
+          </div>
+          <div class="table-scroll">
+            <table class="dash-table">
+              <thead>
+                <tr>
+                  <th>실시간 순위</th>
+                  <th>학생 이름</th>
+                  <th>현재 점수</th>
+                  <th>진행 문제 수</th>
+                  <th>상태</th>
+                </tr>
+              </thead>
+              <tbody id="teacher-scoreboard-body">
+                <!-- Dynamically populated -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Teacher Force Controls -->
+        <div class="dash-actions">
+          <button id="btn-teacher-force-stop" class="btn btn-danger btn-large">
+            🛑 지금 바로 게임 종료 및 시상대 이동
+          </button>
+        </div>
+
+      </div>
+    </section>
+
     <!-- Screen 3: Podium & Results Screen -->
     <section id="screen-podium" class="screen">
       <div class="podium-card">
         <h2 class="podium-title">🎉 영광의 시상대 발표 🎉</h2>
-        <p class="podium-subtitle">오늘의 분리수거 지구 수호 챔피언을 공개합니다!</p>
+        <p class="podium-subtitle">오늘의 1분 분리수거 챔피언을 공개합니다!</p>
 
         <!-- Sprite Podium with 1st, 2nd, 3rd Players -->
         <div class="podium-stage-wrapper">
@@ -274,14 +343,14 @@
           <div id="sprite-podium-asset" class="sprite-box podium-sprite-view"></div>
         </div>
 
-        <!-- My Final Record Box -->
-        <div class="my-final-summary">
+        <!-- My Final Record Box (For Students) -->
+        <div id="student-final-summary" class="my-final-summary">
           <div class="summary-box">
             <span class="sum-label">내 최종 점수</span>
             <span id="my-final-score" class="sum-val">0점</span>
           </div>
           <div class="summary-box">
-            <span class="sum-label">내 순위</span>
+            <span class="sum-label">내 최종 순위</span>
             <span id="my-final-rank" class="sum-val">-위</span>
           </div>
           <div class="summary-box">
@@ -290,34 +359,63 @@
           </div>
         </div>
 
-        <!-- Full Results Table -->
-        <div class="full-leaderboard-box">
-          <h3>전체 랭킹 리더보드 (총 <span id="full-rank-count">0</span>명)</h3>
-          <div class="table-scroll">
-            <table class="lead-table">
-              <thead>
-                <tr>
-                  <th>순위</th>
-                  <th>닉네임</th>
-                  <th>구분</th>
-                  <th>최종 점수</th>
-                </tr>
-              </thead>
-              <tbody id="full-leaderboard-body">
-                <!-- Dynamically filled -->
-              </tbody>
-            </table>
+        <!-- Teacher Notice in Podium -->
+        <div id="teacher-final-summary" class="teacher-podium-notice" style="display: none;">
+          <div class="teacher-notice-box">
+            👨‍🏫 <strong>1분 타임어택이 종료되었습니다!</strong><br>
+            아래 <strong>[결과보기 버튼]</strong>을 눌러 1등부터 꼴등까지 전체 학생 순위를 확인하세요.
           </div>
+        </div>
+
+        <!-- VIEW RESULTS BUTTON (KEY USER REQUIREMENT) -->
+        <div class="view-results-action">
+          <button id="btn-view-results" class="btn btn-primary btn-large pulse-btn">
+            📊 1등부터 꼴등까지 전체 순위 결과보기 🔍
+          </button>
         </div>
 
         <!-- Podium Actions (Teacher can return all to lobby) -->
         <div class="podium-actions">
-          <button id="btn-return-lobby" class="btn btn-primary btn-large">
-            🔄 대기실로 돌아가기
+          <button id="btn-return-lobby" class="btn btn-success btn-large" style="display: none;">
+            🔄 새 게임을 위해 대기실로 돌아가기
           </button>
         </div>
       </div>
     </section>
+
+    <!-- Modal: Full 1st-to-Last Rank Leaderboard -->
+    <div id="modal-full-results" class="modal-backdrop">
+      <div class="modal-card full-results-card">
+        <div class="modal-header">
+          <h3>🏆 전체 학생 순위표 (1등 ~ 꼴등)</h3>
+          <button id="btn-close-results" class="close-x">&times;</button>
+        </div>
+        <div class="modal-body">
+          <p class="results-intro">
+            총 <strong id="results-student-count">0</strong>명의 학생이 참가했습니다.
+          </p>
+          <div class="table-scroll">
+            <table class="lead-table full-rank-table">
+              <thead>
+                <tr>
+                  <th>순위</th>
+                  <th>학생 이름</th>
+                  <th>최종 점수</th>
+                  <th>푼 문제 수</th>
+                  <th>등급</th>
+                </tr>
+              </thead>
+              <tbody id="full-results-tbody">
+                <!-- Dynamically populated 1st to last -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button id="btn-confirm-results" class="btn btn-primary">확인 완료</button>
+        </div>
+      </div>
+    </div>
 
     <!-- Firebase Config Modal -->
     <div id="modal-firebase" class="modal-backdrop">
@@ -360,6 +458,6 @@
   </div>
 
   <!-- Game Logic Script (Module) -->
-  <script type="module" src="game.js?v=20261017_3"></script>
+  <script type="module" src="game.js?v=20261017_4"></script>
 </body>
 </html>
