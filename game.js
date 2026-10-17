@@ -1,7 +1,7 @@
-import { BINS, MASCOTS, UI_ASSETS, ITEMS, applySprite } from './sprite.js';
-import { sound } from './sound.js';
-import { multiplay } from './firebase-sync.js';
-import { getActiveFirebaseConfig } from './firebase-config.js';
+import { BINS, MASCOTS, UI_ASSETS, ITEMS, applySprite } from './sprite.js?v=20261017_3';
+import { sound } from './sound.js?v=20261017_3';
+import { multiplay } from './firebase-sync.js?v=20261017_3';
+import { getActiveFirebaseConfig, sanitizeFirebaseUrl, DEFAULT_FIREBASE_CONFIG } from './firebase-config.js?v=20261017_3';
 
 class WasteGame {
   constructor() {
@@ -24,6 +24,7 @@ class WasteGame {
     this.roundItemsList = [];
     this.playersList = [];
     this.selectedRole = 'student'; // 'student' or 'teacher'
+    this.hasJoinedLobby = false;
 
     this.initElements();
     this.bindEvents();
@@ -153,7 +154,7 @@ class WasteGame {
       this.modeBadge.textContent = '🟡 Firebase 연결 중...';
     } else {
       this.modeBadge.classList.add('status-offline');
-      this.modeBadge.textContent = '⚠️ 가상 멀티플레이 (로컬)';
+      this.modeBadge.textContent = '⚠️ 가상 모드 (클릭하여 설정)';
       this.firebaseWarningBanner.style.display = 'flex';
     }
   }
@@ -163,6 +164,11 @@ class WasteGame {
     this.btnSound.addEventListener('click', () => {
       const muted = sound.toggleMute();
       this.btnSound.textContent = muted ? '🔇' : '🔊';
+    });
+
+    // Mode Badge Click -> Open Firebase settings modal
+    this.modeBadge.addEventListener('click', () => {
+      this.modalFirebase.classList.add('active');
     });
 
     // Role Tab Switching
@@ -181,7 +187,14 @@ class WasteGame {
         return;
       }
       sound.playGameStart();
-      multiplay.broadcastGameStart();
+
+      // 전체 학생이 동일한 20개 문제를 풀 수 있도록 인덱스 순서 생성
+      const totalItems = ITEMS.length;
+      const shuffledIndexes = [...Array(totalItems).keys()]
+        .sort(() => 0.5 - Math.random())
+        .slice(0, this.maxRounds);
+
+      multiplay.broadcastGameStart(shuffledIndexes);
     });
 
     // Force Podium (Teacher in overlay)
@@ -213,7 +226,7 @@ class WasteGame {
 
     this.btnResetFirebase.addEventListener('click', () => {
       localStorage.removeItem('firebase_custom_config');
-      alert('설정이 초기화되었습니다.');
+      alert('Firebase 설정이 기본 클라우드 설정으로 복원되었습니다! 페이지를 새로고침합니다.');
       location.reload();
     });
 
@@ -239,8 +252,9 @@ class WasteGame {
 
     multiplay.onGameStateChange((state) => {
       if (state.status === 'playing') {
-        if (!this.screenGame.classList.contains('active')) {
-          this.startGameFlow();
+        // 대기실에 입장한 상태라면 교사이든 학생이든 즉시 게임 화면으로 진입!
+        if (this.hasJoinedLobby && !this.screenGame.classList.contains('active')) {
+          this.startGameFlow(state.itemOrder);
         }
       } else if (state.status === 'podium') {
         if (!this.screenPodium.classList.contains('active')) {
@@ -252,6 +266,10 @@ class WasteGame {
           this.resetLobbyState();
         }
       }
+    });
+
+    multiplay.onError((err) => {
+      console.warn('[MultiplaySync Error Alert]', err);
     });
 
     // Resize recalculation
@@ -303,6 +321,7 @@ class WasteGame {
     const nick = this.inputNickname.value.trim() || (this.selectedRole === 'teacher' ? '선생님' : '학생');
     const room = this.inputRoom.value.trim() || 'class1';
 
+    this.hasJoinedLobby = true;
     multiplay.setPlayerInfo(nick, room, this.selectedRole);
     multiplay.joinRoom();
 
@@ -360,15 +379,19 @@ class WasteGame {
     });
   }
 
-  startGameFlow() {
+  startGameFlow(itemOrder = null) {
     this.currentRound = 1;
     this.score = 0;
     this.gameScoreText.textContent = this.score;
     this.gameRoundText.textContent = this.currentRound;
     this.finishedOverlay.style.display = 'none';
 
-    // Shuffle 20 items
-    this.roundItemsList = [...ITEMS].sort(() => 0.5 - Math.random()).slice(0, this.maxRounds);
+    // 만약 선생님이 공유한 문제 순서가 있으면 동일하게 사용, 없으면 랜덤 셔플
+    if (Array.isArray(itemOrder) && itemOrder.length > 0) {
+      this.roundItemsList = itemOrder.map(idx => ITEMS[idx] || ITEMS[0]);
+    } else {
+      this.roundItemsList = [...ITEMS].sort(() => 0.5 - Math.random()).slice(0, this.maxRounds);
+    }
 
     this.showScreen('game');
     this.loadRoundItem();
@@ -704,17 +727,20 @@ class WasteGame {
   }
 
   handleSaveFirebaseConfig() {
-    const config = {
-      databaseURL: this.fbDatabaseUrl.value.trim(),
-      apiKey: this.fbApiKey.value.trim(),
-      projectId: this.fbProjectId.value.trim(),
-      appId: this.fbAppId.value.trim()
-    };
+    const rawUrl = this.fbDatabaseUrl.value.trim();
+    const sanitizedUrl = sanitizeFirebaseUrl(rawUrl);
 
-    if (!config.databaseURL) {
-      alert('Firebase Database URL을 반드시 입력해주세요!\n예: https://your-project-default-rtdb.firebaseio.com');
+    if (!sanitizedUrl) {
+      alert('올바른 Firebase Realtime Database URL을 입력해주세요!\n예: https://waste-game-87be1-default-rtdb.firebaseio.com');
       return;
     }
+
+    const config = {
+      databaseURL: sanitizedUrl,
+      apiKey: this.fbApiKey.value.trim(),
+      projectId: this.fbProjectId.value.trim() || 'waste-game-87be1',
+      appId: this.fbAppId.value.trim()
+    };
 
     localStorage.setItem('firebase_custom_config', JSON.stringify(config));
     alert('Firebase 설정이 저장되었습니다! 페이지를 새로고침하여 즉시 연결합니다.');

@@ -2,16 +2,16 @@
  * Firebase Realtime Database Synchronization Module
  * 
  * Manages Teacher / Student Roles, Room State, Realtime Player Scores,
- * and Broadcast Events.
+ * and Broadcast Events with robust reconnection and error handling.
  */
 
-import { getActiveFirebaseConfig } from './firebase-config.js';
+import { getActiveFirebaseConfig } from './firebase-config.js?v=20261017_3';
 
 class MultiplaySync {
   constructor() {
     this.roomId = 'class1';
     this.playerId = 'p_' + Math.random().toString(36).substring(2, 9);
-    this.playerName = '학생1';
+    this.playerName = '학생';
     this.role = 'student'; // 'student' or 'teacher'
     this.score = 0;
     this.round = 1;
@@ -21,15 +21,18 @@ class MultiplaySync {
     this.database = null;
     this.isFirebaseReady = false;
     this.isConnectedToServer = false;
+    this.hasJoinedRoom = false;
 
     this.listeners = {
       players: [],
       gameState: [],
-      connection: []
+      connection: [],
+      error: []
     };
 
-    // Virtual Fallback Channel (same-tab testing only)
+    // Virtual Fallback Channel (same-tab/local testing only)
     this.channel = null;
+    this.heartbeatTimer = null;
     this.setupVirtualChannel();
 
     // Auto-initialize Firebase if config is present
@@ -48,7 +51,7 @@ class MultiplaySync {
         }
       };
     } catch (e) {
-      console.warn('BroadcastChannel not supported:', e);
+      console.warn('[MultiplaySync] BroadcastChannel not supported:', e);
     }
   }
 
@@ -58,6 +61,7 @@ class MultiplaySync {
       this.initFirebase(config);
     } else {
       console.warn('[MultiplaySync] Firebase config not set. Running in offline/virtual mode.');
+      this.triggerListeners('connection', { ready: false, online: false, mode: 'virtual' });
     }
   }
 
@@ -73,7 +77,7 @@ class MultiplaySync {
     }
 
     try {
-      if (window.firebase) {
+      if (typeof window !== 'undefined' && window.firebase) {
         if (!firebase.apps.length) {
           this.firebaseApp = firebase.initializeApp(config);
         } else {
@@ -82,19 +86,41 @@ class MultiplaySync {
         this.database = firebase.database();
         this.isFirebaseReady = true;
 
+        console.log('[MultiplaySync] Firebase initialized successfully with URL:', config.databaseURL);
+
         // Monitor connection state (.info/connected)
         const connectedRef = this.database.ref('.info/connected');
         connectedRef.on('value', (snap) => {
-          this.isConnectedToServer = (snap.val() === true);
+          const isConnected = (snap.val() === true);
+          this.isConnectedToServer = isConnected;
+          console.log('[MultiplaySync] RTDB Connection Status:', isConnected ? '🟢 ONLINE' : '🟡 CONNECTING/OFFLINE');
+
           this.triggerListeners('connection', {
             ready: true,
             online: this.isConnectedToServer,
             mode: 'firebase'
           });
+
+          // Reconnected: restore room presence if already joined
+          if (this.isConnectedToServer && this.hasJoinedRoom) {
+            console.log('[MultiplaySync] Restoring room presence after reconnect...');
+            this.registerPlayerInFirebase();
+          }
+        }, (error) => {
+          console.error('[MultiplaySync] .info/connected listener error:', error);
+          this.triggerListeners('connection', { ready: true, online: false, error: error.message, mode: 'firebase' });
         });
 
-        console.log('[MultiplaySync] Firebase initialized successfully with URL:', config.databaseURL);
+        // If user already joined room while waiting for connection, promote to Firebase room now
+        if (this.hasJoinedRoom) {
+          this.joinRoom();
+        }
+
         return true;
+      } else {
+        console.warn('[MultiplaySync] window.firebase not loaded yet. Waiting...');
+        setTimeout(() => this.autoInit(), 500);
+        return false;
       }
     } catch (err) {
       console.error('[MultiplaySync] Firebase init error:', err);
@@ -102,7 +128,6 @@ class MultiplaySync {
       this.triggerListeners('connection', { ready: false, online: false, error: err.message, mode: 'virtual' });
       return false;
     }
-    return false;
   }
 
   setPlayerInfo(name, roomId, role = 'student') {
@@ -119,11 +144,27 @@ class MultiplaySync {
    * 방 입장 (교사 또는 학생)
    */
   joinRoom() {
+    this.hasJoinedRoom = true;
     this.score = 0;
     this.round = 1;
     this.completed = false;
 
     if (this.isFirebaseReady && this.database) {
+      this.registerPlayerInFirebase();
+      this.listenToRoomData();
+    } else {
+      // Virtual Sync Fallback (Local Multi-Tab)
+      this.virtualJoinRoom();
+    }
+  }
+
+  /**
+   * Firebase Realtime Database에 플레이어 등록 및 연결 끊김 감지 설정
+   */
+  registerPlayerInFirebase() {
+    if (!this.database) return;
+
+    try {
       // 1. If teacher, register host in room info if not set
       if (this.role === 'teacher') {
         const infoRef = this.database.ref(`rooms/${this.roomId}/info`);
@@ -132,7 +173,7 @@ class MultiplaySync {
           hostName: this.playerName,
           status: 'lobby',
           lastActive: firebase.database.ServerValue.TIMESTAMP
-        });
+        }).catch(err => console.error('[MultiplaySync] Teacher info update error:', err));
       }
 
       // 2. Register player in rooms/{roomId}/players/{playerId}
@@ -145,30 +186,52 @@ class MultiplaySync {
         round: this.round,
         completed: false,
         updatedAt: firebase.database.ServerValue.TIMESTAMP
+      }).then(() => {
+        console.log(`[MultiplaySync] Player registered in room ${this.roomId}:`, this.playerName);
+      }).catch(err => {
+        console.error('[MultiplaySync] Player set error:', err);
       });
 
-      // Auto remove on disconnect
-      playerRef.onDisconnect().remove();
-
-      // 3. Listen to all players in this room
-      const roomPlayersRef = this.database.ref(`rooms/${this.roomId}/players`);
-      roomPlayersRef.on('value', (snapshot) => {
-        const data = snapshot.val() || {};
-        const playerList = Object.values(data);
-        this.triggerListeners('players', playerList);
+      // Auto remove on disconnect (when tab closes or network drops permanently)
+      playerRef.onDisconnect().remove().catch(err => {
+        console.warn('[MultiplaySync] onDisconnect setup error:', err);
       });
 
-      // 4. Listen to room game state (rooms/{roomId}/info)
-      const stateRef = this.database.ref(`rooms/${this.roomId}/info`);
-      stateRef.on('value', (snapshot) => {
-        const info = snapshot.val() || { status: 'lobby' };
-        this.triggerListeners('gameState', info);
-      });
-
-    } else {
-      // Virtual Sync Fallback (Local Multi-Tab)
-      this.virtualJoinRoom();
+    } catch (e) {
+      console.error('[MultiplaySync] registerPlayerInFirebase error:', e);
     }
+  }
+
+  /**
+   * 방의 참가자 목록 및 게임 상태 실시간 감청
+   */
+  listenToRoomData() {
+    if (!this.database) return;
+
+    // 1. Listen to all players in this room
+    const roomPlayersRef = this.database.ref(`rooms/${this.roomId}/players`);
+    roomPlayersRef.off(); // Remove previous listeners to prevent duplicates
+    roomPlayersRef.on('value', (snapshot) => {
+      const data = snapshot.val() || {};
+      const playerList = Object.values(data);
+      console.log(`[MultiplaySync] Received players list (${playerList.length} players):`, playerList.map(p => p.name));
+      this.triggerListeners('players', playerList);
+    }, (error) => {
+      console.error('[MultiplaySync] players listener error:', error);
+      this.triggerListeners('error', { type: 'players', message: error.message });
+    });
+
+    // 2. Listen to room game state (rooms/{roomId}/info)
+    const stateRef = this.database.ref(`rooms/${this.roomId}/info`);
+    stateRef.off();
+    stateRef.on('value', (snapshot) => {
+      const info = snapshot.val() || { status: 'lobby' };
+      console.log('[MultiplaySync] Received game state:', info.status);
+      this.triggerListeners('gameState', info);
+    }, (error) => {
+      console.error('[MultiplaySync] gameState listener error:', error);
+      this.triggerListeners('error', { type: 'gameState', message: error.message });
+    });
   }
 
   /**
@@ -186,7 +249,7 @@ class MultiplaySync {
         round: this.round,
         completed: this.completed,
         updatedAt: firebase.database.ServerValue.TIMESTAMP
-      });
+      }).catch(err => console.error('[MultiplaySync] updateScore error:', err));
     } else {
       this.virtualHeartbeat();
     }
@@ -194,14 +257,18 @@ class MultiplaySync {
 
   /**
    * 선생님이 누르는 [게임 시작] 신호 (전체 학생 화면 동시 전환)
+   * @param {Array<number>} itemOrder - 선택 사항: 20개 문제 인덱스 순서
    */
-  broadcastGameStart() {
+  broadcastGameStart(itemOrder = null) {
     const payload = {
       status: 'playing',
       startedAt: Date.now(),
       startedBy: this.playerName,
-      roundCount: 20
+      roundCount: 20,
+      itemOrder: itemOrder
     };
+
+    console.log('[MultiplaySync] Broadcasting game start to room:', this.roomId);
 
     if (this.isFirebaseReady && this.database) {
       // Reset all players scores in this room before starting
@@ -218,7 +285,11 @@ class MultiplaySync {
         }
       });
 
-      this.database.ref(`rooms/${this.roomId}/info`).update(payload);
+      this.database.ref(`rooms/${this.roomId}/info`).update(payload).then(() => {
+        console.log('[MultiplaySync] Game start broadcast successful!');
+      }).catch(err => {
+        console.error('[MultiplaySync] Game start broadcast failed:', err);
+      });
     } else {
       const key = `virtual_state_${this.roomId}`;
       localStorage.setItem(key, JSON.stringify(payload));
@@ -305,7 +376,7 @@ class MultiplaySync {
   }
 
   virtualHeartbeat() {
-    if (this.isFirebaseReady) return;
+    if (this.isFirebaseReady && this.isConnectedToServer) return;
     const key = `virtual_room_${this.roomId}`;
     let players = [];
     try {
@@ -354,10 +425,14 @@ class MultiplaySync {
     this.listeners.connection.push(callback);
   }
 
+  onError(callback) {
+    this.listeners.error.push(callback);
+  }
+
   triggerListeners(event, data) {
     if (this.listeners[event]) {
       this.listeners[event].forEach(cb => {
-        try { cb(data); } catch (e) { console.error(e); }
+        try { cb(data); } catch (e) { console.error(`[MultiplaySync] Error in ${event} listener:`, e); }
       });
     }
   }

@@ -17,7 +17,18 @@
   <!-- Canvas Confetti for Celebration -->
   <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
   
-  <link rel="stylesheet" href="style.css">
+  <script>
+    // 모바일 브라우저의 손상된 구버전 localStorage 캐시 자동 복구
+    try {
+      var saved = localStorage.getItem('firebase_custom_config');
+      if (saved && (saved.indexOf('https://waste-game-87be1-default-rtdb.firebaseio.com/https:') !== -1 || saved.indexOf('/https:') !== -1)) {
+        localStorage.removeItem('firebase_custom_config');
+        console.log('[Auto-Heal] Cleared corrupt legacy firebase config from localStorage.');
+      }
+    } catch(e) {}
+  </script>
+
+  <link rel="stylesheet" href="style.css?v=20261017_3">
 </head>
 <body>
   <div id="app" class="app-container">
@@ -341,7 +352,7 @@
         </div>
         <div class="modal-footer">
           <button id="btn-save-firebase" class="btn btn-success">연동 및 저장</button>
-          <button id="btn-reset-firebase" class="btn btn-secondary">설정 지우기</button>
+          <button id="btn-reset-firebase" class="btn btn-secondary">기본 클라우드 설정으로 복원</button>
         </div>
       </div>
     </div>
@@ -349,6 +360,6 @@
   </div>
 
   <!-- Game Logic Script (Module) -->
-  <script type="module" src="game.js"></script>
+  <script type="module" src="game.js?v=20261017_3"></script>
 </body>
 </html>
