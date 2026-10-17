@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Jua&family=Noto+Sans+KR:wght@400;600;800;900&display=swap" rel="stylesheet">
   
-  <!-- Firebase SDKs (Compat for simplicity and broad compatibility) -->
+  <!-- Firebase SDKs (Compat v9) -->
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
   
@@ -29,52 +29,97 @@
         <h1 class="game-title">5초 분리수거 대작전</h1>
       </div>
       <div class="header-controls">
-        <div id="room-badge" class="badge room-badge">방: <span id="current-room-text">대기실</span></div>
-        <div id="mode-badge" class="badge mode-badge">가상 멀티플레이</div>
+        <div id="room-badge" class="badge room-badge">방: <span id="current-room-text">미입장</span></div>
+        <div id="role-badge" class="badge role-badge">학생</div>
+        <div id="mode-badge" class="badge mode-badge status-offline">연결 확인 중...</div>
         <button id="btn-sound" class="icon-btn" title="사운드 온/오프">🔊</button>
         <button id="btn-firebase-modal" class="icon-btn" title="Firebase 설정">⚙️</button>
       </div>
     </header>
 
+    <!-- Firebase Connection Warning Banner (Shown if Firebase is not connected) -->
+    <div id="firebase-warning-banner" class="warning-banner" style="display: none;">
+      <span>⚠️ <strong>멀티플레이 안내:</strong> 여러 기기(스마트폰/태블릿) 간 실시간 통신을 위해 Firebase 연동이 필요합니다.</span>
+      <button id="btn-banner-config" class="btn-banner">⚙️ 설정하기</button>
+    </div>
+
     <!-- Screen 1: Lobby Screen -->
     <section id="screen-lobby" class="screen active">
       <div class="lobby-card">
+        
+        <!-- Mascot Greeting -->
         <div class="lobby-mascot-preview">
           <div id="lobby-poodle" class="sprite-box poodle-preview"></div>
           <div class="speech-bubble">
             안녕! 난 환경지킴이 푸들이야 🐶<br>
-            친구들과 함께 5초 안에 분리수거를 성공해봐!
+            교실 친구들과 함께 5초 안에 분리수거 퀴즈를 맞혀봐!
           </div>
         </div>
 
-        <div class="lobby-form">
+        <!-- Role Selector Tab: Student vs Teacher -->
+        <div class="role-selector">
+          <button id="tab-student" class="role-tab active" data-role="student">
+            🧑‍🎓 학생으로 참가
+          </button>
+          <button id="tab-teacher" class="role-tab" data-role="teacher">
+            👨‍🏫 선생님 (방 개설 & 진행)
+          </button>
+        </div>
+
+        <!-- Entry Form -->
+        <div id="lobby-form" class="lobby-form">
           <div class="input-group">
-            <label for="input-nickname">내 닉네임</label>
-            <input type="text" id="input-nickname" placeholder="닉네임 입력 (예: 초록요정)" maxlength="10" value="환경지킴이">
+            <label for="input-nickname" id="label-nickname">내 닉네임</label>
+            <input type="text" id="input-nickname" placeholder="닉네임 입력 (예: 청소부)" maxlength="10" value="환경지킴이">
           </div>
           <div class="input-group">
-            <label for="input-room">교실 방 코드 (동일한 방에 모여요)</label>
+            <label for="input-room">교실 방 코드 (선생님이 알려준 코드)</label>
             <input type="text" id="input-room" placeholder="방 코드 (예: class1)" maxlength="12" value="class1">
           </div>
           <button id="btn-enter-room" class="btn btn-primary pulse-btn">대기실 입장하기 🚪</button>
         </div>
 
-        <!-- Waiting Room Room State -->
+        <!-- Waiting Room State (After Entering Room) -->
         <div id="lobby-room-area" class="room-state-area" style="display: none;">
-          <div class="room-info-bar">
-            <h3>방 접속자 목록 (<span id="player-count">0</span>명 접속 중)</h3>
-            <span class="room-hint">새 창이나 다른 기기에서 같은 방 코드로 들어오면 함께 겨룹니다!</span>
+          
+          <div class="room-header-box">
+            <div class="room-info-left">
+              <h3>🏫 방 코드: <span id="display-room-code" class="highlight-code">class1</span></h3>
+              <p class="room-subtext">현재 접속 중인 참가자: <strong id="player-count">0</strong>명</p>
+            </div>
+            <div id="host-tag" class="host-badge">진행자: 선생님</div>
           </div>
 
-          <div id="player-list-grid" class="player-grid">
-            <!-- Player tags dynamically rendered -->
+          <!-- Realtime Player List Grid -->
+          <div class="player-list-section">
+            <div class="section-title">접속한 친구들 목록</div>
+            <div id="player-list-grid" class="player-grid">
+              <!-- Dynamically populated -->
+            </div>
           </div>
 
-          <div class="lobby-actions">
-            <button id="btn-start-game" class="btn btn-success btn-large">
-              🚀 모두 함께 게임 시작! (20라운드)
+          <!-- TEACHER ACTION AREA: Only visible to Teacher -->
+          <div id="teacher-action-area" class="teacher-box" style="display: none;">
+            <div class="teacher-notice">
+              📢 <strong>선생님 전용 컨트롤:</strong><br>
+              학생들이 모두 입장하면 아래 버튼을 눌러 게임을 시작해 주세요!
+            </div>
+            <button id="btn-start-game" class="btn btn-success btn-large pulse-btn">
+              🚀 전체 학생 게임 시작! (20라운드)
             </button>
           </div>
+
+          <!-- STUDENT WAITING AREA: Only visible to Students -->
+          <div id="student-waiting-area" class="student-box">
+            <div class="waiting-spinner-area">
+              <div class="spinner"></div>
+              <p class="waiting-text">
+                ⏳ <strong>선생님이 게임을 시작할 때까지 대기 중입니다...</strong><br>
+                잠시만 기다려주세요! 🐶
+              </p>
+            </div>
+          </div>
+
         </div>
 
         <!-- Rules Briefing -->
@@ -84,7 +129,7 @@
             <li>⏱️ <strong>5초 스피드!</strong> 쓰레기가 나타나면 5초 안에 올바른 수거함으로 드래그!</li>
             <li>✨ <strong>정답:</strong> +10점 획득 및 푸들의 환호!</li>
             <li>💥 <strong>오답 / 타임아웃:</strong> -5점 감점 및 화면 흔들림!</li>
-            <li>🏆 <strong>20라운드</strong>를 마친 후 시상대에서 최종 순위가 공개됩니다!</li>
+            <li>🏆 <strong>20라운드</strong> 후 전체 참가자의 점수로 시상대가 열립니다!</li>
           </ul>
         </div>
       </div>
@@ -93,7 +138,7 @@
     <!-- Screen 2: In-Game Screen -->
     <section id="screen-game" class="screen">
       
-      <!-- Top In-Game Bar: Score, Round, Live Top 5 Leaderboard -->
+      <!-- Top In-Game Bar -->
       <div class="game-top-bar">
         <div class="my-status-box">
           <div class="round-badge">라운드 <span id="game-round-text">1</span> / 20</div>
@@ -126,7 +171,6 @@
       <!-- Central Game Arena: Item Drag Spawn Area -->
       <div id="game-arena" class="game-arena">
         <div class="arena-center">
-          <!-- The draggable item card -->
           <div id="drag-item-card" class="item-card" touch-action="none">
             <div id="item-sprite" class="sprite-box item-sprite-view"></div>
             <div id="item-name" class="item-name-tag">페트병</div>
@@ -136,29 +180,37 @@
 
         <!-- Floating Score Effect Box -->
         <div id="floating-score-container" class="floating-container"></div>
+
+        <!-- Finished Waiting Overlay (When player finishes 20 rounds before others) -->
+        <div id="finished-overlay" class="finished-overlay" style="display: none;">
+          <div class="finished-modal">
+            <h3>🎉 20라운드 완주 성공!</h3>
+            <p>내 최종 점수: <strong id="finished-my-score">0</strong>점</p>
+            <p class="wait-subtext">다른 친구들이 문제를 모두 풀 때까지 잠시 대기합니다... 🐶</p>
+            <div id="teacher-force-podium" style="display: none; margin-top: 15px;">
+              <button id="btn-force-podium" class="btn btn-primary">🏆 지금 바로 시상대로 이동하기</button>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- Bottom Bins: 4 Recycle Bins from Sprite Sheet -->
       <div class="bins-container">
-        <!-- Plastic Bin (Blue) -->
         <div class="bin-slot" data-bin="plastic">
           <div id="bin-sprite-plastic" class="sprite-box bin-sprite-view"></div>
           <div class="bin-label label-plastic">플라스틱 (파랑)</div>
         </div>
 
-        <!-- Paper Bin (Yellow) -->
         <div class="bin-slot" data-bin="paper">
           <div id="bin-sprite-paper" class="sprite-box bin-sprite-view"></div>
           <div class="bin-label label-paper">종이 (노랑)</div>
         </div>
 
-        <!-- Metal/Can Bin (Green) -->
         <div class="bin-slot" data-bin="can">
           <div id="bin-sprite-can" class="sprite-box bin-sprite-view"></div>
           <div class="bin-label label-can">캔/고철 (초록)</div>
         </div>
 
-        <!-- Trash Bin (Red) -->
         <div class="bin-slot" data-bin="trash">
           <div id="bin-sprite-trash" class="sprite-box bin-sprite-view"></div>
           <div class="bin-label label-trash">일반쓰레기 (빨강)</div>
@@ -169,8 +221,8 @@
     <!-- Screen 3: Podium & Results Screen -->
     <section id="screen-podium" class="screen">
       <div class="podium-card">
-        <h2 class="podium-title">🎉 20라운드 완주! 영광의 시상대 🎉</h2>
-        <p class="podium-subtitle">오늘의 분리수거 지구 수호 챔피언을 발표합니다!</p>
+        <h2 class="podium-title">🎉 영광의 시상대 발표 🎉</h2>
+        <p class="podium-subtitle">오늘의 분리수거 지구 수호 챔피언을 공개합니다!</p>
 
         <!-- Sprite Podium with 1st, 2nd, 3rd Players -->
         <div class="podium-stage-wrapper">
@@ -229,13 +281,14 @@
 
         <!-- Full Results Table -->
         <div class="full-leaderboard-box">
-          <h3>전체 랭킹 리더보드</h3>
+          <h3>전체 랭킹 리더보드 (총 <span id="full-rank-count">0</span>명)</h3>
           <div class="table-scroll">
             <table class="lead-table">
               <thead>
                 <tr>
                   <th>순위</th>
                   <th>닉네임</th>
+                  <th>구분</th>
                   <th>최종 점수</th>
                 </tr>
               </thead>
@@ -246,9 +299,10 @@
           </div>
         </div>
 
+        <!-- Podium Actions (Teacher can return all to lobby) -->
         <div class="podium-actions">
           <button id="btn-return-lobby" class="btn btn-primary btn-large">
-            🔄 대기실로 돌아가 다시 도전하기
+            🔄 대기실로 돌아가기
           </button>
         </div>
       </div>
@@ -263,13 +317,13 @@
         </div>
         <div class="modal-body">
           <p class="modal-desc">
-            Firebase Console에서 Realtime Database 프로젝트를 생성하고,
-            아래에 Firebase Config 정보를 입력하면 전 세계 어디서든 실시간 동기화가 가능합니다.
-            <br><small>(입력하지 않아도 같은 컴퓨터 내 여러 탭/창 간에는 '가상 멀티플레이'로 즉시 작동합니다!)</small>
+            학생들이 각자의 스마트폰/태블릿에서 접속해 다 같이 겨루려면
+            <strong>Firebase Realtime Database</strong> 연동이 필수적입니다.
+            <br>Firebase Console의 프로젝트 설정 정보를 입력해 주세요.
           </p>
 
           <div class="input-group">
-            <label>Database URL</label>
+            <label>Database URL <span class="req">*필수</span></label>
             <input type="text" id="fb-database-url" placeholder="https://your-project-default-rtdb.firebaseio.com">
           </div>
           <div class="input-group">
@@ -287,7 +341,7 @@
         </div>
         <div class="modal-footer">
           <button id="btn-save-firebase" class="btn btn-success">연동 및 저장</button>
-          <button id="btn-reset-firebase" class="btn btn-secondary">기본 가상 모드로 초기화</button>
+          <button id="btn-reset-firebase" class="btn btn-secondary">설정 지우기</button>
         </div>
       </div>
     </div>

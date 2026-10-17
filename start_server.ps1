@@ -16,7 +16,7 @@ try {
 }
 
 Write-Host "==========================================================" -ForegroundColor Green
-Write-Host " [실시간 3초 분리수거 대작전 게임 서버 실행 중]" -ForegroundColor Cyan
+Write-Host " [실시간 5초 분리수거 대작전 게임 서버 실행 중]" -ForegroundColor Cyan
 Write-Host " 주소: $prefix" -ForegroundColor Yellow
 Write-Host " 브라우저를 열어 접속하세요. 종료하려면 Ctrl+C를 누르세요." -ForegroundColor Gray
 Write-Host "==========================================================" -ForegroundColor Green
